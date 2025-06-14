@@ -59,13 +59,14 @@ ldd target/x86_64-unknown-linux-musl/release/my-cli-app
 # Build for ARM64 Linux
 cargo build --target aarch64-unknown-linux-musl --release
 
-# Build for ARM7 Linux  
+# Build for ARM7 Linux
 cargo build --target armv7-unknown-linux-musleabihf --release
 ```
 
 ### 4. Distribute Your CLI
 
-The resulting binaries are completely self-contained and can be distributed without any dependencies:
+The resulting binaries are completely self-contained and can be distributed
+without any dependencies:
 
 ```bash
 # Copy binary to target system
@@ -79,9 +80,11 @@ tar -czf my-cli-app-linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release
 
 ### musl Toolchain Setup
 
-The `scripts/musl-toolchain-ubuntu-setup.sh` script sets up the musl toolchain for building static binaries on Ubuntu/Debian systems.
+The `scripts/musl-toolchain-ubuntu-setup.sh` script sets up the musl toolchain
+for building static binaries on Ubuntu/Debian systems.
 
-**Note**: This script is marked as executable via Git attributes. On Unix-like systems, you may need to set executable permissions manually:
+**Note**: This script is marked as executable via Git attributes. On Unix-like
+systems, you may need to set executable permissions manually:
 
 ```bash
 chmod +x scripts/musl-toolchain-ubuntu-setup.sh
@@ -108,11 +111,14 @@ chmod +x scripts/musl-toolchain-ubuntu-setup.sh
 
 #### What the script does
 
-1. **System Requirements Check**: Verifies the system is Ubuntu/Debian compatible
-2. **Package Installation**: Installs musl development tools, build essentials, and dependencies
+1. **System Requirements Check**: Verifies the system is Ubuntu/Debian
+   compatible
+2. **Package Installation**: Installs musl development tools, build essentials,
+   and dependencies
 3. **Rust Setup**: Installs Rust (if not present) and adds musl targets
 4. **Cargo Configuration**: Sets up cargo config for musl linking
-5. **Cross-compilation Tools**: Installs additional toolchains for cross-compilation
+5. **Cross-compilation Tools**: Installs additional toolchains for
+   cross-compilation
 6. **Verification**: Tests that the installation works correctly
 7. **Optional Testing**: Can run a test build to verify everything works
 
@@ -131,7 +137,8 @@ cargo build --target aarch64-unknown-linux-musl --release
 cargo build --target armv7-unknown-linux-musleabihf --release
 ```
 
-The resulting binaries will be statically linked and can run on any compatible Linux system without external dependencies.
+The resulting binaries will be statically linked and can run on any compatible
+Linux system without external dependencies.
 
 ## Project Structure
 
@@ -163,4 +170,3 @@ The resulting binaries will be statically linked and can run on any compatible L
 ## License
 
 [Add your license information here]
-
