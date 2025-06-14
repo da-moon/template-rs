@@ -1,0 +1,7 @@
+# Mark shell scripts as executable
+scripts/*.sh text eol=lf
+scripts/musl-toolchain-ubuntu-setup.sh text eol=lf
+
+# Ensure shell scripts maintain executable permissions
+*.sh text eol=lf
+

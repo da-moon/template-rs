@@ -1,0 +1,31 @@
+[build]
+
+# Default options for cargo build, check, clippy, etc.
+# Will apply to any command that accepts --message-format
+# FIXME: why doesn't it work
+# target = "x86_64-unknown-linux-musl"
+rustflags = [
+    "-C", "target-feature=+crt-static",
+    "-C", "relocation-model=static" ,
+]
+
+[term]
+# Makes the output more compact by default
+# FIXME: why doesn't it work
+verbose = false
+
+[target.x86_64-unknown-linux-musl]
+linker = "musl-gcc"
+rustflags = [
+    "-C", "target-feature=+crt-static",
+    "-C", "relocation-model=static" ,
+    "-C", "link-arg=-no-pie" ,
+    # You can experiment with -C link-arg=-no-pie if needed
+    # for older musl-gcc or certain toolchains
+    "-C", "link-arg=-static",
+]
+
+[target.x86_64-unknown-linux-gnu]
+[target.aarch64-unknown-linux-musl]
+[target.aarch64-pc-windows-msvc]
+

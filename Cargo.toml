@@ -1,0 +1,52 @@
+[package]
+name = "template-rs"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+clap = { version = "4.5.37", default-features = false, features = [
+    "derive",
+    "cargo",
+    "std",
+    "color",
+    "env",
+    "help",
+] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
+miette = { version = "7.5.0", default-features = false , features = ["derive"] }
+tokio = { version = "1.44.2", features = ["full"] }
+
+
+[build-dependencies]
+gix = { version = "0.72.1" , features = ["basic"]}
+gix-ref = "0.52.1"
+chrono = "0.4"
+rustc_version = "0.4"
+version_check = "0.9.4"
+rustversion = "1.0.14"
+
+[features]
+default = ["static"]
+static = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+
+[lints.rust]
+unused = "allow"
+
+[lints.clippy]
+enum_glob_use = "deny"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+
+
