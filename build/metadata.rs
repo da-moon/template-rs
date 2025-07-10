@@ -37,7 +37,7 @@ fn rust_version() -> String {
                 println!("cargo:rustc-cfg=nightly_compiler");
             }
             format!("{} {} ({:?} channel)", meta.semver, meta.host, meta.channel)
-        }
+        },
         Err(_) => "unknown".to_string(),
     }
 }

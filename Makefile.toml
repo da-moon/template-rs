@@ -2,49 +2,97 @@
 default_to_workspace = false
 skip_core_tasks = true
 
+[env]
+# Common arguments used across multiple tasks
+MESSAGE_FORMAT = "--message-format=short"
+ALL_FEATURES = "--all-features"
+ALL_TARGETS = "--all-targets"
+WORKSPACE_FLAG = "--workspace"
+
+# Clippy configurations
+CLIPPY_BASE_ARGS = "-D warnings"
+STRICT_CLIPPY_DENY = "--deny warnings --deny clippy::pedantic --deny clippy::nursery"
+STRICT_CLIPPY_ALLOW = "--allow clippy::wildcard_imports --allow clippy::used_underscore_binding --allow clippy::missing_docs_in_private_items --allow clippy::missing_panics_doc --allow clippy::missing_errors_doc --allow clippy::missing_safety_doc --allow clippy::doc_markdown"
+
+#  ╭──────────────────────────────────────────────────────────╮
+#  │                    Root Tasks                            │
+#  ╰──────────────────────────────────────────────────────────╯
+
 [tasks.build]
 description = "Build with short messages"
 command = "cargo"
-args = ["build", "--message-format=short"]
-
-[tasks.clippy]
-description = "Run clippy checks"
-command = "cargo"
-args = ["clippy", "--message-format=short", "--all-targets", "--all-features", "--", "-D", "warnings"]
-
-[tasks.check]
-description = "Run cargo check"
-command = "cargo"
-args = ["check", "--message-format=short"]
+args = ["build", "${MESSAGE_FORMAT}"]
 
 [tasks.test]
 description = "Run unit tests"
 command = "cargo"
-args = ["test", "--message-format=short"]
+args = ["test", "${MESSAGE_FORMAT}"]
+
+[tasks.check]
+description = "Run cargo check"
+command = "cargo"
+args = ["check", "${MESSAGE_FORMAT}"]
+
+[tasks.clippy]
+description = "Run clippy checks"
+script = [
+'''
+#!@duckscript
+exec --fail-on-error cargo clippy ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} -- ${CLIPPY_BASE_ARGS}
+'''
+]
 
 [tasks.strict-clippy]
 description = "Run clippy checks in pedantic mode"
-command = "cargo"
-args = [
-    "clippy",
-    "--all-features",
-    "--offline",
-    "--message-format=short",
-    "--",
-    "--deny", "warnings",
-    "--deny", "clippy::pedantic",
-    "--deny", "clippy::nursery",
-    "--allow", "clippy::wildcard_imports",
-    "--allow", "clippy::used_underscore_binding",
-    "--allow", "clippy::missing_docs_in_private_items",
-    "--allow", "clippy::missing_panics_doc",
-    "--allow", "clippy::missing_errors_doc",
-    "--allow", "clippy::missing_safety_doc",
-    "--allow", "clippy::doc_markdown",
+script = [
+'''
+#!@duckscript
+exec --fail-on-error cargo clippy ${ALL_FEATURES} ${MESSAGE_FORMAT} -- ${STRICT_CLIPPY_DENY} ${STRICT_CLIPPY_ALLOW}
+'''
 ]
 
 [tasks.format]
 description = "Check code formatting"
 command = "cargo"
-args = ["fmt", "--message-format=short"]
+args = ["fmt", "--", "--check"]
+
+[tasks.format_fix]
+description = "Fix code formatting"
+command = "cargo"
+args = ["fmt"]
+
+[tasks.fix]
+description = "Run cargo fix"
+command = "cargo"
+args = ["fix", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib"]
+
+[tasks.fix_edition]
+description = "Run cargo fix with edition migration"
+command = "cargo"
+args = ["fix", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib", "--edition"]
+
+[tasks.fix_clippy]
+description = "Run cargo fix with clippy suggestions"
+script = [
+'''
+#!@duckscript
+exec --fail-on-error cargo clippy ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} --fix --allow-dirty -- -D warnings
+'''
+]
+
+#  ╭──────────────────────────────────────────────────────────╮
+#  │                  Validation Sequences                    │
+#  ╰──────────────────────────────────────────────────────────╯
+[tasks.validate_initial]
+description = "Run full validation sequence: build, test, format, check"
+dependencies = ["build", "test", "format_fix", "fix", "check", "clippy"]
+
+[tasks.validate]
+description = "Run full validation sequence: build, test, fix, format_fix, check, clippy"
+dependencies = ["build", "test", "format_fix","fix" , "check", "clippy"]
+
+[tasks.validate_strict]
+description = "Run full validation sequence with strict clippy"
+dependencies = ["build", "test", "format_fix","fix", "check", "strict-clippy"]
+
 

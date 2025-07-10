@@ -62,10 +62,10 @@ async fn main() -> Result<()> {
         Some(_cmd) => {
             // Command handling would go here
             info!("Command handling not yet implemented");
-        }
+        },
         None => {
             info!("No command specified");
-        }
+        },
     }
 
     Ok(())
