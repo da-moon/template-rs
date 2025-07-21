@@ -1,3 +1,13 @@
+!.git
+!.jj
+!target
+!target/**
+!target/*
+
+!./**/target
+!./**/target/**
+!./**/target/*
+
 !vendor
 !vendor/**
 !vendor/*

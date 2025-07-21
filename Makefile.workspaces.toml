@@ -1,0 +1,377 @@
+[config]
+default_to_workspace = false
+skip_core_tasks = true
+
+[env]
+# Common arguments used across multiple tasks
+MESSAGE_FORMAT = "--message-format=short"
+ALL_FEATURES = "--all-features"
+ALL_TARGETS = "--all-targets"
+WORKSPACE_FLAG = "--workspace"
+WORKSPACE_MEMBERS = "<..update this..>"
+
+# Clippy configurations
+CLIPPY_BASE_ARGS = "${ALL_TARGETS} ${ALL_FEATURES} -- -D warnings"
+STRICT_CLIPPY_DENY = "--deny warnings --deny clippy::pedantic --deny clippy::nursery"
+STRICT_CLIPPY_ALLOW = "--allow clippy::wildcard_imports --allow clippy::used_underscore_binding --allow clippy::missing_docs_in_private_items --allow clippy::missing_panics_doc --allow clippy::missing_errors_doc --allow clippy::missing_safety_doc --allow clippy::doc_markdown"
+
+#  ╭──────────────────────────────────────────────────────────╮
+#  │                    Root Tasks                            │
+#  ╰──────────────────────────────────────────────────────────╯
+
+[tasks.build]
+description = "Build with short messages"
+command = "cargo"
+args = ["build", "${MESSAGE_FORMAT}"]
+
+[tasks.test]
+description = "Run unit tests"
+command = "cargo"
+args = ["test", "${MESSAGE_FORMAT}"]
+
+[tasks.check]
+description = "Run cargo check"
+command = "cargo"
+args = ["check", "${MESSAGE_FORMAT}"]
+
+[tasks.clippy]
+description = "Run clippy checks"
+script = [
+'''
+#!@duckscript
+exec --fail-on-error cargo clippy ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} -- -D warnings
+'''
+]
+
+[tasks.strict-clippy]
+description = "Run clippy checks in pedantic mode"
+script = [
+'''
+#!@duckscript
+exec --fail-on-error cargo clippy ${ALL_FEATURES} ${MESSAGE_FORMAT} -- ${STRICT_CLIPPY_DENY} ${STRICT_CLIPPY_ALLOW}
+'''
+]
+
+[tasks.format]
+description = "Check code formatting"
+command = "cargo"
+args = ["fmt", "--", "--check"]
+
+[tasks.format_fix]
+description = "Fix code formatting"
+command = "cargo"
+args = ["fmt"]
+
+[tasks.fix]
+description = "Run cargo fix"
+command = "cargo"
+args = ["fix", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib"]
+
+[tasks.fix_edition]
+description = "Run cargo fix with edition migration"
+command = "cargo"
+args = ["fix", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib", "--edition"]
+
+[tasks.fix_clippy]
+description = "Run cargo fix with clippy suggestions"
+script = [
+'''
+#!@duckscript
+exec --fail-on-error cargo clippy ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} --fix --allow-dirty -- -D warnings
+'''
+]
+
+#  ╭──────────────────────────────────────────────────────────╮
+#  │                 Workspace-Wide Tasks                     │
+#  ╰──────────────────────────────────────────────────────────╯
+
+[tasks.build_all]
+description = "Build all workspace members"
+command = "cargo"
+args = ["build", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}"]
+
+[tasks.test_all]
+description = "Run tests for all workspace members"
+command = "cargo"
+args = ["test", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}"]
+
+[tasks.check_all]
+description = "Run cargo check on all workspace members"
+command = "cargo"
+args = ["check", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}"]
+
+[tasks.clippy_all]
+description = "Run clippy checks on all workspace members"
+script = [
+'''
+#!@duckscript
+exec --fail-on-error cargo clippy ${WORKSPACE_FLAG} ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} -- -D warnings
+'''
+]
+
+[tasks.strict_clippy_all]
+description = "Run strict clippy checks on all workspace members"
+script = [
+'''
+#!@duckscript
+exec --fail-on-error cargo clippy ${WORKSPACE_FLAG} ${ALL_FEATURES} ${MESSAGE_FORMAT} -- ${STRICT_CLIPPY_DENY} ${STRICT_CLIPPY_ALLOW}
+'''
+]
+
+[tasks.format_all]
+description = "Check code formatting for all workspace members"
+command = "cargo"
+args = ["fmt", "--all", "--", "--check"]
+
+[tasks.format_all_fix]
+description = "Fix code formatting for all workspace members"
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.fix_all]
+description = "Run cargo fix on all workspace members"
+command = "cargo"
+args = ["fix", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib"]
+
+[tasks.fix_edition_all]
+description = "Run cargo fix with edition migration on all workspace members"
+command = "cargo"
+args = ["fix", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib", "--edition"]
+
+[tasks.fix_clippy_all]
+description = "Run cargo fix with clippy suggestions on all workspace members"
+script = [
+'''
+#!@duckscript
+exec --fail-on-error cargo clippy ${WORKSPACE_FLAG} ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} --fix --allow-dirty -- -D warnings
+'''
+]
+
+#  ╭──────────────────────────────────────────────────────────╮
+#  │                    Helper Tasks                          │
+#  ╰──────────────────────────────────────────────────────────╯
+
+[tasks.for_each_member]
+description = "Run chosen task for each workspace member. Ex: 'cargo make for_each_member build'"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Wrong number of arguments! Correct example: 'cargo make for_each_member build'"
+
+task = set ${1}
+members = split ${WORKSPACE_MEMBERS} " "
+
+for member in ${members}
+    echo Running ${task} for workspace member: ${member}
+    exec --fail-on-error cargo make ${task}_member ${member}
+end
+'''
+]
+
+[tasks.list_members]
+description = "List all workspace members"
+script = [
+'''
+#!@duckscript
+members = split ${WORKSPACE_MEMBERS} " "
+echo Workspace members:
+for member in ${members}
+    echo - ${member}
+end
+'''
+]
+
+#  ╭──────────────────────────────────────────────────────────╮
+#  │               Generic Member Tasks                       │
+#  ╰──────────────────────────────────────────────────────────╯
+
+[tasks.build_member]
+description = "Build specific workspace member. Usage: cargo make build_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make build_member <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo build -p ${member} --message-format=short
+'''
+]
+
+[tasks.test_member]
+description = "Test specific workspace member. Usage: cargo make test_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make test_member <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo test -p ${member} --message-format=short
+'''
+]
+
+[tasks.check_member]
+description = "Check specific workspace member. Usage: cargo make check_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make check_member <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo check -p ${member} --message-format=short
+'''
+]
+
+[tasks.clippy_member]
+description = "Run clippy on specific workspace member. Usage: cargo make clippy_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make clippy_member <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo clippy -p ${member} ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} -- -D warnings
+'''
+]
+
+[tasks.strict_clippy_member]
+description = "Run strict clippy on specific workspace member. Usage: cargo make strict_clippy_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make strict_clippy_member <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo clippy -p ${member} ${ALL_FEATURES} ${MESSAGE_FORMAT} -- ${STRICT_CLIPPY_DENY} ${STRICT_CLIPPY_ALLOW}
+'''
+]
+
+[tasks.format_member]
+description = "Check formatting for specific workspace member. Usage: cargo make format_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make format_member <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo fmt -p ${member} -- --check
+'''
+]
+
+[tasks.format_member_fix]
+description = "Fix formatting for specific workspace member. Usage: cargo make format_member_fix <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make format_member_fix <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo fmt -p ${member}
+'''
+]
+
+[tasks.fix_member]
+description = "Run cargo fix on specific workspace member. Usage: cargo make fix_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make fix_member <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo fix --message-format=short --allow-dirty --lib -p ${member}
+'''
+]
+
+[tasks.fix_edition_member]
+description = "Run cargo fix with edition migration on specific workspace member. Usage: cargo make fix_edition_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make fix_edition_member <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo fix --message-format=short --allow-dirty --lib --edition -p ${member}
+'''
+]
+
+[tasks.fix_clippy_member]
+description = "Run cargo fix with clippy suggestions on specific workspace member. Usage: cargo make fix_clippy_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make fix_clippy_member <member_name>"
+
+member = set ${1}
+exec --fail-on-error cargo clippy -p ${member} ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} --fix --allow-dirty -- -D warnings
+'''
+]
+
+
+#  ╭──────────────────────────────────────────────────────────╮
+#  │                  Validation Sequences                    │
+#  ╰──────────────────────────────────────────────────────────╯
+
+[tasks.validate]
+description = "Run full validation sequence: build, test, format, check, clippy"
+dependencies = ["build", "test", "format", "check", "clippy"]
+
+[tasks.validate_strict]
+description = "Run full validation sequence with strict clippy"
+dependencies = ["build", "test", "format", "check", "strict-clippy"]
+
+[tasks.validate_all]
+description = "Run full validation sequence for all workspace members"
+dependencies = ["build_all", "test_all", "format_all", "check_all", "clippy_all"]
+
+[tasks.validate_strict_all]
+description = "Run full validation sequence with strict clippy for all workspace members"
+dependencies = ["build_all", "test_all", "format_all", "check_all", "strict_clippy_all"]
+
+
+[tasks.validate_member]
+description = "Run full validation sequence for specific workspace member. Usage: cargo make validate_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make validate_member <member_name>"
+
+member = set ${1}
+echo Running validation sequence for ${member}...
+exec --fail-on-error cargo make build_member ${member}
+exec --fail-on-error cargo make test_member ${member}
+exec --fail-on-error cargo make format_member ${member}
+exec --fail-on-error cargo make check_member ${member}
+exec cargo make clippy_member ${member}
+echo Validation complete for ${member}!
+'''
+]
+
+[tasks.validate_strict_member]
+description = "Run full validation sequence with strict clippy for specific workspace member. Usage: cargo make validate_strict_member <member_name>"
+script = [
+'''
+#!@duckscript
+defined = is_defined 1
+assert ${defined} "Missing workspace member! Usage: cargo make validate_strict_member <member_name>"
+
+member = set ${1}
+echo Running strict validation sequence for ${member}...
+exec --fail-on-error cargo make build_member ${member}
+exec --fail-on-error cargo make test_member ${member}
+exec --fail-on-error cargo make format_member ${member}
+exec --fail-on-error cargo make check_member ${member}
+exec --fail-on-error cargo make strict_clippy_member ${member}
+echo Strict validation complete for ${member}!
+'''
+]
