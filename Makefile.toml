@@ -52,11 +52,6 @@ exec --fail-on-error cargo clippy ${ALL_FEATURES} ${MESSAGE_FORMAT} -- ${STRICT_
 ]
 
 [tasks.format]
-description = "Check code formatting"
-command = "cargo"
-args = ["fmt", "--", "--check"]
-
-[tasks.format_fix]
 description = "Fix code formatting"
 command = "cargo"
 args = ["fmt"]
@@ -84,15 +79,15 @@ exec --fail-on-error cargo clippy ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURE
 #  │                  Validation Sequences                    │
 #  ╰──────────────────────────────────────────────────────────╯
 [tasks.validate_initial]
-description = "Run full validation sequence: build, test, format, check"
-dependencies = ["build", "test", "format_fix", "fix", "check", "clippy"]
+description = "Run full validation sequence: build, test, format, fix, check, clippy"
+dependencies = ["build", "test", "format", "fix", "check", "clippy"]
 
 [tasks.validate]
-description = "Run full validation sequence: build, test, fix, format_fix, check, clippy"
-dependencies = ["build", "test", "format_fix","fix" , "check", "clippy"]
+description = "Run full validation sequence: build, test, fix, format, check, clippy"
+dependencies = ["build", "test", "format","fix" , "check", "clippy"]
 
 [tasks.validate_strict]
 description = "Run full validation sequence with strict clippy"
-dependencies = ["build", "test", "format_fix","fix", "check", "strict-clippy"]
+dependencies = ["build", "test", "format","fix", "check", "strict-clippy"]
 
 

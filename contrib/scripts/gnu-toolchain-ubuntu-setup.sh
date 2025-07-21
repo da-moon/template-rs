@@ -3,7 +3,11 @@ set -e
 
 # Install system dependencies
 sudo apt-get update -qq
-sudo apt-get install -yqq curl build-essential libssl-dev pkg-config libclang-dev clang cmake git ca-certificates gnupg lsb-release jq tar gzip
+sudo apt-get install -yqq curl build-essential libssl-dev pkg-config libclang-dev clang cmake git ca-certificates gnupg lsb-release jq tar gzip \
+  || {
+    echo "Failed to install required packages"
+    exit 1
+  }
 
 # Install Rust if not present
 if ! command -v rustc &>/dev/null; then
@@ -22,21 +26,25 @@ rustup default "${TOOLCHAIN}"
 
 # Install cargo-binstall
 if ! command -v cargo-binstall &>/dev/null; then
-  # Get latest release
-  RELEASE_INFO=$(curl -s https://api.github.com/repos/cargo-bins/cargo-binstall/releases/latest)
-  DOWNLOAD_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | contains("x86_64-unknown-linux-gnu.tgz") and (contains("full") | not) and (contains(".sig") | not)) | .browser_download_url')
-
-  # Download and install
-  TEMP_DIR=$(mktemp -d)
-  curl -L -o "$TEMP_DIR/cargo-binstall.tgz" "$DOWNLOAD_URL"
-  tar -xzf "$TEMP_DIR/cargo-binstall.tgz" -C "$TEMP_DIR"
-  mkdir -p ~/.cargo/bin
-  cp "$(find "$TEMP_DIR" -name "cargo-binstall" -type f -executable)" ~/.cargo/bin/
-  rm -rf "$TEMP_DIR"
+  curl -sL "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/latest" \
+    | jq -r ".assets[] | select(.name | contains(\"$(uname -m)\") and contains(\"linux-musl\") and endswith(\".tgz\") and (contains(\".sig\") | not) and (contains(\".full\") | not)) | .browser_download_url" \
+    | xargs curl -sL \
+      | tar -xzOf - cargo-binstall \
+      | tee /usr/local/bin/cargo-binstall >/dev/null \
+    && chmod +x /usr/local/bin/cargo-binstall \
+    && cargo binstall --help \
+    || {
+      echo "Failed to download cargo-binstall"
+      exit 1
+    }
 fi
+rustup target add x86_64-unknown-linux-gnu || {
+  echo "Failed to add gnu target"
+  exit 1
+}
 
+TOOLS=(cargo-outdated cargo-expand cargo-tree cargo-release cargo-make cargo-tarpaulin cargo-llvm-cov)
 # Install cargo tools
-TOOLS=(cargo-cyclonedx cargo-audit cargo-outdated cargo-watch cargo-expand cargo-tree cargo-release cargo-make cargo-tarpaulin cargo-llvm-cov)
 for tool in "${TOOLS[@]}"; do
   cargo install --list | grep -q "^$tool " || cargo binstall "$tool" --quiet --no-confirm
 done
