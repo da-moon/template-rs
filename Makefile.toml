@@ -346,24 +346,41 @@ json = set ${output.stdout}
 crate_name = ""
 crate_version = ""
 
-# Extract name
-if contains ${json} "\"name\":"
-    parts = split ${json} "\"name\":"
-    part = array_get ${parts} 1
-    parts = split ${part} "\""
-    crate_name = array_get ${parts} 1
-end
-
-# Extract version
-if contains ${json} "\"version\":"
-    parts = split ${json} "\"version\":"
-    part = array_get ${parts} 1
-    parts = split ${part} "\""
-    crate_version = array_get ${parts} 1
+# The cargo metadata JSON structure has packages array
+# We need to extract the first package's name and version
+# Look for "packages":[{ pattern to find the packages array
+if contains ${json} "\"packages\":"
+    # Split on "packages":[ to get the part after
+    parts = split ${json} "\"packages\":["
+    if greater_than ${parts.length} 1
+        packages_part = array_get ${parts} 1
+        
+        # Now extract the first package object
+        # Look for the first occurrence of "name": within the packages array
+        if contains ${packages_part} "\"name\":"
+            parts = split ${packages_part} "\"name\":"
+            part = array_get ${parts} 1
+            parts = split ${part} "\""
+            crate_name = array_get ${parts} 1
+        end
+        
+        # Look for the first occurrence of "version": within the packages array
+        # This will be the package version, not the metadata format version
+        if contains ${packages_part} "\"version\":"
+            parts = split ${packages_part} "\"version\":"
+            part = array_get ${parts} 1
+            parts = split ${part} "\""
+            crate_version = array_get ${parts} 1
+        end
+    end
 end
 
 if is_empty ${crate_name}
-    trigger_error "Failed to determine crate name"
+    trigger_error "Failed to determine crate name from cargo metadata"
+end
+
+if is_empty ${crate_version}
+    trigger_error "Failed to determine crate version from cargo metadata"
 end
 
 echo "Packaging ${crate_name} v${crate_version}"
