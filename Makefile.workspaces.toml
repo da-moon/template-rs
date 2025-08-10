@@ -1,377 +1,577 @@
 [config]
-default_to_workspace = false
+default_to_workspace = true
 skip_core_tasks = true
 
 [env]
-# Common arguments used across multiple tasks
-MESSAGE_FORMAT = "--message-format=short"
-ALL_FEATURES = "--all-features"
-ALL_TARGETS = "--all-targets"
-WORKSPACE_FLAG = "--workspace"
-WORKSPACE_MEMBERS = "<..update this..>"
+# Enable workspace makefile extension
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 
-# Clippy configurations
-CLIPPY_BASE_ARGS = "${ALL_TARGETS} ${ALL_FEATURES} -- -D warnings"
+# Common arguments - can be overridden
+MESSAGE_FORMAT = { value = "--message-format=short", condition = { env_not_set = ["MESSAGE_FORMAT"] } }
+ALL_FEATURES = { value = "--all-features", condition = { env_not_set = ["ALL_FEATURES"] } }
+ALL_TARGETS = { value = "--all-targets", condition = { env_not_set = ["ALL_TARGETS"] } }
+WORKSPACE_FLAG = { value = "--workspace", condition = { env_not_set = ["WORKSPACE_FLAG"] } }
+
+# Feature handling
+FEATURES = { value = "", condition = { env_not_set = ["FEATURES"] } }
+
+# Build configuration
+RELEASE = { value = "0", condition = { env_not_set = ["RELEASE"] } }
+STRICT = { value = "0", condition = { env_not_set = ["STRICT"] } }
+
+# Clippy configurations - single source of truth
+CLIPPY_BASE_ARGS = "-D warnings"
 STRICT_CLIPPY_DENY = "--deny warnings --deny clippy::pedantic --deny clippy::nursery"
 STRICT_CLIPPY_ALLOW = "--allow clippy::wildcard_imports --allow clippy::used_underscore_binding --allow clippy::missing_docs_in_private_items --allow clippy::missing_panics_doc --allow clippy::missing_errors_doc --allow clippy::missing_safety_doc --allow clippy::doc_markdown"
 
+# Paths
+BIN_DIR = { value = "target/debug", condition = { env_not_set = ["BIN_DIR"] } }
+DIST_DIR = { value = "dist", condition = { env_not_set = ["DIST_DIR"] } }
+
 #  ╭──────────────────────────────────────────────────────────╮
-#  │                    Root Tasks                            │
+#  │                    Initialization                        │
 #  ╰──────────────────────────────────────────────────────────╯
 
-[tasks.build]
-description = "Build with short messages"
-command = "cargo"
-args = ["build", "${MESSAGE_FORMAT}"]
+[tasks.init]
+extend = "../Makefile.toml"
 
-[tasks.test]
-description = "Run unit tests"
-command = "cargo"
-args = ["test", "${MESSAGE_FORMAT}"]
+#  ╭──────────────────────────────────────────────────────────╮
+#  │                  Target Preparation                      │
+#  ╰──────────────────────────────────────────────────────────╯
 
-[tasks.check]
-description = "Run cargo check"
-command = "cargo"
-args = ["check", "${MESSAGE_FORMAT}"]
-
-[tasks.clippy]
-description = "Run clippy checks"
-script = [
-'''
-#!@duckscript
-exec --fail-on-error cargo clippy ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} -- -D warnings
-'''
-]
-
-[tasks.strict-clippy]
-description = "Run clippy checks in pedantic mode"
-script = [
-'''
-#!@duckscript
-exec --fail-on-error cargo clippy ${ALL_FEATURES} ${MESSAGE_FORMAT} -- ${STRICT_CLIPPY_DENY} ${STRICT_CLIPPY_ALLOW}
-'''
-]
-
-[tasks.format]
-description = "Check code formatting"
-command = "cargo"
-args = ["fmt", "--", "--check"]
-
-[tasks.format_fix]
-description = "Fix code formatting"
-command = "cargo"
-args = ["fmt"]
-
-[tasks.fix]
-description = "Run cargo fix"
-command = "cargo"
-args = ["fix", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib"]
-
-[tasks.fix_edition]
-description = "Run cargo fix with edition migration"
-command = "cargo"
-args = ["fix", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib", "--edition"]
-
-[tasks.fix_clippy]
-description = "Run cargo fix with clippy suggestions"
-script = [
-'''
-#!@duckscript
-exec --fail-on-error cargo clippy ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} --fix --allow-dirty -- -D warnings
-'''
-]
+[tasks.prepare_targets]
+extend = "../Makefile.toml"
 
 #  ╭──────────────────────────────────────────────────────────╮
 #  │                 Workspace-Wide Tasks                     │
 #  ╰──────────────────────────────────────────────────────────╯
 
-[tasks.build_all]
-description = "Build all workspace members"
+[tasks.clean]
+description = "Clean all workspace members"
+category = "Build"
 command = "cargo"
-args = ["build", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}"]
+args = ["clean", "${WORKSPACE_FLAG}"]
+
+[tasks.doc]
+description = "Generate documentation for all workspace members"
+category = "Documentation"
+dependencies = ["init"]
+script = '''
+#!@duckscript
+feature_args = get_env FEATURE_ARGS
+exec --fail-on-error cargo doc ${WORKSPACE_FLAG} ${feature_args} --no-deps
+'''
+
+[tasks.build_all]
+description = "Build all workspace members for host target"
+category = "Build"
+dependencies = ["init"]
+script = '''
+#!@duckscript
+cargo_args = get_env CARGO_BUILD_ARGS
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+exec --fail-on-error cargo build ${WORKSPACE_FLAG} ${cargo_args} ${feature_args} ${message_format}
+'''
 
 [tasks.test_all]
-description = "Run tests for all workspace members"
-command = "cargo"
-args = ["test", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}"]
+description = "Run tests for all workspace members on host target"
+category = "Test"
+dependencies = ["init"]
+script = '''
+#!@duckscript
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+exec --fail-on-error cargo test ${WORKSPACE_FLAG} ${feature_args} ${message_format}
+'''
 
 [tasks.check_all]
-description = "Run cargo check on all workspace members"
-command = "cargo"
-args = ["check", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}"]
+description = "Run cargo check on all workspace members for host target"
+category = "Build"
+dependencies = ["init"]
+script = '''
+#!@duckscript
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+exec --fail-on-error cargo check ${WORKSPACE_FLAG} ${feature_args} ${message_format}
+'''
 
 [tasks.clippy_all]
-description = "Run clippy checks on all workspace members"
-script = [
-'''
+description = "Run clippy on all workspace members for host target"
+category = "Build"
+dependencies = ["init"]
+script = '''
 #!@duckscript
-exec --fail-on-error cargo clippy ${WORKSPACE_FLAG} ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} -- -D warnings
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+clippy_args = get_env CLIPPY_ARGS
+all_targets = get_env ALL_TARGETS
+exec --fail-on-error cargo clippy ${WORKSPACE_FLAG} ${feature_args} ${all_targets} ${message_format} -- ${clippy_args}
 '''
-]
-
-[tasks.strict_clippy_all]
-description = "Run strict clippy checks on all workspace members"
-script = [
-'''
-#!@duckscript
-exec --fail-on-error cargo clippy ${WORKSPACE_FLAG} ${ALL_FEATURES} ${MESSAGE_FORMAT} -- ${STRICT_CLIPPY_DENY} ${STRICT_CLIPPY_ALLOW}
-'''
-]
 
 [tasks.format_all]
-description = "Check code formatting for all workspace members"
+description = "Check formatting for all workspace members"
+category = "Development"
 command = "cargo"
-args = ["fmt", "--all", "--", "--check"]
+args = ["fmt", "${WORKSPACE_FLAG}", "--", "--check"]
 
-[tasks.format_all_fix]
-description = "Fix code formatting for all workspace members"
+[tasks.format_fix_all]
+description = "Fix formatting for all workspace members"
+category = "Development"
 command = "cargo"
-args = ["fmt", "--all"]
+args = ["fmt", "${WORKSPACE_FLAG}"]
 
 [tasks.fix_all]
 description = "Run cargo fix on all workspace members"
-command = "cargo"
-args = ["fix", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib"]
-
-[tasks.fix_edition_all]
-description = "Run cargo fix with edition migration on all workspace members"
-command = "cargo"
-args = ["fix", "${WORKSPACE_FLAG}", "${MESSAGE_FORMAT}", "--allow-dirty", "--lib", "--edition"]
-
-[tasks.fix_clippy_all]
-description = "Run cargo fix with clippy suggestions on all workspace members"
-script = [
-'''
+category = "Development"
+dependencies = ["init"]
+script = '''
 #!@duckscript
-exec --fail-on-error cargo clippy ${WORKSPACE_FLAG} ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} --fix --allow-dirty -- -D warnings
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+exec --fail-on-error cargo fix ${WORKSPACE_FLAG} ${feature_args} ${message_format} --allow-dirty
 '''
-]
 
 #  ╭──────────────────────────────────────────────────────────╮
-#  │                    Helper Tasks                          │
+#  │            Workspace Member×Target Matrix                │
 #  ╰──────────────────────────────────────────────────────────╯
 
-[tasks.for_each_member]
-description = "Run chosen task for each workspace member. Ex: 'cargo make for_each_member build'"
-script = [
-'''
+[tasks.build_all_members_targets]
+description = "Build all workspace members for all specified targets"
+category = "Build"
+dependencies = ["init", "prepare_targets"]
+script = '''
 #!@duckscript
-defined = is_defined 1
-assert ${defined} "Wrong number of arguments! Correct example: 'cargo make for_each_member build'"
 
-task = set ${1}
-members = split ${WORKSPACE_MEMBERS} " "
+members = get_env WORKSPACE_MEMBERS
+member_list = split ${members} " "
+targets = get_env TARGETS
+target_list = split ${targets} " "
+cargo_args = get_env CARGO_BUILD_ARGS
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
 
-for member in ${members}
-    echo Running ${task} for workspace member: ${member}
-    exec --fail-on-error cargo make ${task}_member ${member}
+for member in ${member_list}
+    member = trim ${member}
+    if not is_empty ${member}
+        echo "=== Building member: ${member} ==="
+        for target in ${target_list}
+            target = trim ${target}
+            if not is_empty ${target}
+                echo "  Building for target: ${target}"
+                if equals ${member} "."
+                    exec --fail-on-error cargo build --target ${target} ${cargo_args} ${feature_args} ${message_format}
+                else
+                    exec --fail-on-error cargo build -p ${member} --target ${target} ${cargo_args} ${feature_args} ${message_format}
+                end
+            end
+        end
+    end
 end
 '''
-]
 
-[tasks.list_members]
-description = "List all workspace members"
-script = [
-'''
+[tasks.check_all_members_targets]
+description = "Run cargo check on all workspace members for all specified targets"
+category = "Build"
+dependencies = ["init", "prepare_targets"]
+script = '''
 #!@duckscript
-members = split ${WORKSPACE_MEMBERS} " "
-echo Workspace members:
-for member in ${members}
-    echo - ${member}
+
+members = get_env WORKSPACE_MEMBERS
+member_list = split ${members} " "
+targets = get_env TARGETS
+target_list = split ${targets} " "
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+
+for member in ${member_list}
+    member = trim ${member}
+    if not is_empty ${member}
+        echo "=== Checking member: ${member} ==="
+        for target in ${target_list}
+            target = trim ${target}
+            if not is_empty ${target}
+                echo "  Checking target: ${target}"
+                if equals ${member} "."
+                    exec --fail-on-error cargo check --target ${target} ${feature_args} ${message_format}
+                else
+                    exec --fail-on-error cargo check -p ${member} --target ${target} ${feature_args} ${message_format}
+                end
+            end
+        end
+    end
 end
 '''
-]
+
+[tasks.clippy_all_members_targets]
+description = "Run clippy on all workspace members for all specified targets"
+category = "Build"
+dependencies = ["init", "prepare_targets"]
+script = '''
+#!@duckscript
+
+members = get_env WORKSPACE_MEMBERS
+member_list = split ${members} " "
+targets = get_env TARGETS
+target_list = split ${targets} " "
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+clippy_args = get_env CLIPPY_ARGS
+all_targets = get_env ALL_TARGETS
+
+for member in ${member_list}
+    member = trim ${member}
+    if not is_empty ${member}
+        echo "=== Running clippy for member: ${member} ==="
+        for target in ${target_list}
+            target = trim ${target}
+            if not is_empty ${target}
+                echo "  Clippy for target: ${target}"
+                if equals ${member} "."
+                    exec --fail-on-error cargo clippy --target ${target} ${feature_args} ${all_targets} ${message_format} -- ${clippy_args}
+                else
+                    exec --fail-on-error cargo clippy -p ${member} --target ${target} ${feature_args} ${all_targets} ${message_format} -- ${clippy_args}
+                end
+            end
+        end
+    end
+end
+'''
+
+[tasks.test_all_members_targets]
+description = "Run tests for all workspace members on all specified targets (skips if no runner)"
+category = "Test"
+dependencies = ["init", "prepare_targets"]
+script = '''
+#!@duckscript
+
+members = get_env WORKSPACE_MEMBERS
+member_list = split ${members} " "
+targets = get_env TARGETS
+target_list = split ${targets} " "
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+host_triple = get_env HOST_TRIPLE
+
+for member in ${member_list}
+    member = trim ${member}
+    if not is_empty ${member}
+        echo "=== Testing member: ${member} ==="
+        for target in ${target_list}
+            target = trim ${target}
+            if not is_empty ${target}
+                # Check if we need a runner for cross-compilation
+                needs_runner = not equals ${target} ${host_triple}
+                
+                if ${needs_runner}
+                    # Check if runner is configured
+                    runner_env = concat "CARGO_TARGET_" ${target}
+                    runner_env = replace ${runner_env} "-" "_"
+                    runner_env = to_uppercase ${runner_env}
+                    runner_env = concat ${runner_env} "_RUNNER"
+                    
+                    runner = get_env ${runner_env}
+                    if is_empty ${runner}
+                        echo "  Skipping tests for ${target}: no runner configured (set ${runner_env})"
+                    else
+                        echo "  Testing target ${target} with runner: ${runner}"
+                        if equals ${member} "."
+                            exec --fail-on-error cargo test --target ${target} ${feature_args} ${message_format}
+                        else
+                            exec --fail-on-error cargo test -p ${member} --target ${target} ${feature_args} ${message_format}
+                        end
+                    end
+                else
+                    echo "  Testing target: ${target}"
+                    if equals ${member} "."
+                        exec --fail-on-error cargo test --target ${target} ${feature_args} ${message_format}
+                    else
+                        exec --fail-on-error cargo test -p ${member} --target ${target} ${feature_args} ${message_format}
+                    end
+                end
+            end
+        end
+    end
+end
+'''
+
+[tasks.package_all_members_targets]
+description = "Package all workspace member binaries for all targets"
+category = "Build"
+dependencies = ["init", "build_all_members_targets"]
+script = '''
+#!@duckscript
+
+members = get_env WORKSPACE_MEMBERS
+member_list = split ${members} " "
+targets = get_env TARGETS
+target_list = split ${targets} " "
+dist_dir = get_env DIST_DIR
+
+# Get workspace metadata
+output = exec --get-exit-code cargo metadata --no-deps --format-version 1
+if not equals ${output.code} 0
+    trigger_error "Failed to get cargo metadata"
+end
+
+for member in ${member_list}
+    member = trim ${member}
+    if not is_empty ${member}
+        echo "=== Packaging member: ${member} ==="
+        
+        # Get member metadata
+        member_path = ${member}
+        if equals ${member} "."
+            member_path = ""
+        end
+        
+        # Check if member has a binary
+        member_toml = concat ${member_path} "/Cargo.toml"
+        if equals ${member} "."
+            member_toml = "Cargo.toml"
+        end
+        
+        if is_path_exists ${member_toml}
+            cargo_content = readfile ${member_toml}
+            
+            # Check for [[bin]] or default src/main.rs
+            has_bin = contains ${cargo_content} "[[bin]]"
+            main_rs = concat ${member_path} "/src/main.rs"
+            if equals ${member} "."
+                main_rs = "src/main.rs"
+            end
+            
+            if not ${has_bin}
+                has_bin = is_path_exists ${main_rs}
+            end
+            
+            if ${has_bin}
+                # Extract crate name and version
+                crate_name = ""
+                crate_version = ""
+                binary_name = ""
+                
+                # Basic TOML parsing for name and version
+                lines = split ${cargo_content} \n
+                for line in ${lines}
+                    if starts_with ${line} "name = "
+                        parts = split ${line} "\""
+                        if greater_than ${parts.length} 1
+                            crate_name = array_get ${parts} 1
+                        end
+                    elif starts_with ${line} "version = "
+                        parts = split ${line} "\""
+                        if greater_than ${parts.length} 1
+                            crate_version = array_get ${parts} 1
+                        end
+                    end
+                end
+                
+                # Look for binary name
+                in_bin = set false
+                for line in ${lines}
+                    if equals ${line} "[[bin]]"
+                        in_bin = set true
+                    elif ${in_bin}
+                        if starts_with ${line} "name = "
+                            parts = split ${line} "\""
+                            if greater_than ${parts.length} 1
+                                binary_name = array_get ${parts} 1
+                                in_bin = set false
+                            end
+                        end
+                    end
+                end
+                
+                # Default binary name to crate name
+                if is_empty ${binary_name}
+                    binary_name = ${crate_name}
+                end
+                
+                if not is_empty ${crate_name}
+                    for target in ${target_list}
+                        target = trim ${target}
+                        if not is_empty ${target}
+                            # Determine target directory
+                            target_dir = concat "target/" ${target}
+                            release = get_env RELEASE
+                            if equals ${release} "1"
+                                target_dir = concat ${target_dir} "/release"
+                            else
+                                target_dir = concat ${target_dir} "/debug"
+                            end
+                            
+                            # Source binary path
+                            src_binary = concat ${target_dir} "/" ${binary_name}
+                            
+                            # Handle Windows suffix
+                            if contains ${target} "windows"
+                                if not ends_with ${src_binary} ".exe"
+                                    src_binary = concat ${src_binary} ".exe"
+                                end
+                            end
+                            
+                            # Check if binary exists
+                            if is_path_exists ${src_binary}
+                                # Create distribution directory
+                                dist_target_dir = concat ${dist_dir} "/" ${target}
+                                mkdir ${dist_target_dir}
+                                
+                                # Destination filename
+                                dest_name = concat ${crate_name} "-" ${crate_version} "-" ${target}
+                                if contains ${target} "windows"
+                                    dest_name = concat ${dest_name} ".exe"
+                                end
+                                
+                                dest_path = concat ${dist_target_dir} "/" ${dest_name}
+                                
+                                echo "  Copying ${src_binary} -> ${dest_path}"
+                                cp ${src_binary} ${dest_path}
+                            else
+                                echo "  Warning: Binary not found at ${src_binary}"
+                            end
+                        end
+                    end
+                end
+            else
+                echo "  Skipping ${member}: no binary target found"
+            end
+        end
+    end
+end
+'''
 
 #  ╭──────────────────────────────────────────────────────────╮
-#  │               Generic Member Tasks                       │
+#  │              Per-Member Tasks (Host Only)                │
 #  ╰──────────────────────────────────────────────────────────╯
 
 [tasks.build_member]
-description = "Build specific workspace member. Usage: cargo make build_member <member_name>"
-script = [
-'''
+description = "Build a specific workspace member (use with MEMBER=<name>)"
+category = "Build"
+dependencies = ["init"]
+condition = { env_set = ["MEMBER"] }
+script = '''
 #!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make build_member <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo build -p ${member} --message-format=short
+member = get_env MEMBER
+cargo_args = get_env CARGO_BUILD_ARGS
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+echo "Building member: ${member}"
+exec --fail-on-error cargo build -p ${member} ${cargo_args} ${feature_args} ${message_format}
 '''
-]
 
 [tasks.test_member]
-description = "Test specific workspace member. Usage: cargo make test_member <member_name>"
-script = [
-'''
+description = "Test a specific workspace member (use with MEMBER=<name>)"
+category = "Test"
+dependencies = ["init"]
+condition = { env_set = ["MEMBER"] }
+script = '''
 #!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make test_member <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo test -p ${member} --message-format=short
+member = get_env MEMBER
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+echo "Testing member: ${member}"
+exec --fail-on-error cargo test -p ${member} ${feature_args} ${message_format}
 '''
-]
 
 [tasks.check_member]
-description = "Check specific workspace member. Usage: cargo make check_member <member_name>"
-script = [
-'''
+description = "Check a specific workspace member (use with MEMBER=<name>)"
+category = "Build"
+dependencies = ["init"]
+condition = { env_set = ["MEMBER"] }
+script = '''
 #!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make check_member <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo check -p ${member} --message-format=short
+member = get_env MEMBER
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+echo "Checking member: ${member}"
+exec --fail-on-error cargo check -p ${member} ${feature_args} ${message_format}
 '''
-]
 
 [tasks.clippy_member]
-description = "Run clippy on specific workspace member. Usage: cargo make clippy_member <member_name>"
-script = [
-'''
+description = "Run clippy on a specific workspace member (use with MEMBER=<name>)"
+category = "Build"
+dependencies = ["init"]
+condition = { env_set = ["MEMBER"] }
+script = '''
 #!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make clippy_member <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo clippy -p ${member} ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} -- -D warnings
+member = get_env MEMBER
+feature_args = get_env FEATURE_ARGS
+message_format = get_env MESSAGE_FORMAT
+clippy_args = get_env CLIPPY_ARGS
+all_targets = get_env ALL_TARGETS
+echo "Running clippy on member: ${member}"
+exec --fail-on-error cargo clippy -p ${member} ${feature_args} ${all_targets} ${message_format} -- ${clippy_args}
 '''
-]
 
-[tasks.strict_clippy_member]
-description = "Run strict clippy on specific workspace member. Usage: cargo make strict_clippy_member <member_name>"
-script = [
-'''
+[tasks.run_member]
+description = "Run a specific workspace member binary (use with MEMBER=<name>)"
+category = "Development"
+dependencies = ["init"]
+condition = { env_set = ["MEMBER"] }
+script = '''
 #!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make strict_clippy_member <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo clippy -p ${member} ${ALL_FEATURES} ${MESSAGE_FORMAT} -- ${STRICT_CLIPPY_DENY} ${STRICT_CLIPPY_ALLOW}
+member = get_env MEMBER
+cargo_args = get_env CARGO_BUILD_ARGS
+feature_args = get_env FEATURE_ARGS
+echo "Running member: ${member}"
+exec --fail-on-error cargo run -p ${member} ${cargo_args} ${feature_args}
 '''
-]
-
-[tasks.format_member]
-description = "Check formatting for specific workspace member. Usage: cargo make format_member <member_name>"
-script = [
-'''
-#!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make format_member <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo fmt -p ${member} -- --check
-'''
-]
-
-[tasks.format_member_fix]
-description = "Fix formatting for specific workspace member. Usage: cargo make format_member_fix <member_name>"
-script = [
-'''
-#!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make format_member_fix <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo fmt -p ${member}
-'''
-]
-
-[tasks.fix_member]
-description = "Run cargo fix on specific workspace member. Usage: cargo make fix_member <member_name>"
-script = [
-'''
-#!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make fix_member <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo fix --message-format=short --allow-dirty --lib -p ${member}
-'''
-]
-
-[tasks.fix_edition_member]
-description = "Run cargo fix with edition migration on specific workspace member. Usage: cargo make fix_edition_member <member_name>"
-script = [
-'''
-#!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make fix_edition_member <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo fix --message-format=short --allow-dirty --lib --edition -p ${member}
-'''
-]
-
-[tasks.fix_clippy_member]
-description = "Run cargo fix with clippy suggestions on specific workspace member. Usage: cargo make fix_clippy_member <member_name>"
-script = [
-'''
-#!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make fix_clippy_member <member_name>"
-
-member = set ${1}
-exec --fail-on-error cargo clippy -p ${member} ${MESSAGE_FORMAT} ${ALL_TARGETS} ${ALL_FEATURES} --fix --allow-dirty -- -D warnings
-'''
-]
-
 
 #  ╭──────────────────────────────────────────────────────────╮
 #  │                  Validation Sequences                    │
 #  ╰──────────────────────────────────────────────────────────╯
 
-[tasks.validate]
-description = "Run full validation sequence: build, test, format, check, clippy"
-dependencies = ["build", "test", "format", "check", "clippy"]
-
-[tasks.validate_strict]
-description = "Run full validation sequence with strict clippy"
-dependencies = ["build", "test", "format", "check", "strict-clippy"]
-
 [tasks.validate_all]
-description = "Run full validation sequence for all workspace members"
-dependencies = ["build_all", "test_all", "format_all", "check_all", "clippy_all"]
+description = "Run validation sequence for all workspace members: format, build, test, clippy"
+category = "CI"
+dependencies = ["format_all", "build_all", "test_all", "clippy_all"]
 
-[tasks.validate_strict_all]
-description = "Run full validation sequence with strict clippy for all workspace members"
-dependencies = ["build_all", "test_all", "format_all", "check_all", "strict_clippy_all"]
+[tasks.validate_all_targets]
+description = "Run validation for all members and targets"
+category = "CI"
+dependencies = ["format_all", "build_all_members_targets", "test_all_members_targets", "clippy_all_members_targets"]
 
+[tasks.validate_all_strict]
+description = "Run validation for all members with strict clippy"
+category = "CI"
+env = { "STRICT" = "1" }
+dependencies = ["format_all", "build_all", "test_all", "clippy_all"]
 
-[tasks.validate_member]
-description = "Run full validation sequence for specific workspace member. Usage: cargo make validate_member <member_name>"
-script = [
-'''
+#  ╭──────────────────────────────────────────────────────────╮
+#  │                    Utility Tasks                         │
+#  ╰──────────────────────────────────────────────────────────╯
+
+[tasks.list_members]
+description = "List all workspace members"
+category = "Tools"
+dependencies = ["init"]
+script = '''
 #!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make validate_member <member_name>"
-
-member = set ${1}
-echo Running validation sequence for ${member}...
-exec --fail-on-error cargo make build_member ${member}
-exec --fail-on-error cargo make test_member ${member}
-exec --fail-on-error cargo make format_member ${member}
-exec --fail-on-error cargo make check_member ${member}
-exec cargo make clippy_member ${member}
-echo Validation complete for ${member}!
+members = get_env WORKSPACE_MEMBERS
+member_list = split ${members} " "
+echo "Workspace members:"
+for member in ${member_list}
+    member = trim ${member}
+    if not is_empty ${member}
+        echo "  - ${member}"
+    end
+end
 '''
-]
 
-[tasks.validate_strict_member]
-description = "Run full validation sequence with strict clippy for specific workspace member. Usage: cargo make validate_strict_member <member_name>"
-script = [
-'''
+[tasks.list_targets]
+description = "List all configured targets"
+category = "Tools"
+dependencies = ["init"]
+script = '''
 #!@duckscript
-defined = is_defined 1
-assert ${defined} "Missing workspace member! Usage: cargo make validate_strict_member <member_name>"
-
-member = set ${1}
-echo Running strict validation sequence for ${member}...
-exec --fail-on-error cargo make build_member ${member}
-exec --fail-on-error cargo make test_member ${member}
-exec --fail-on-error cargo make format_member ${member}
-exec --fail-on-error cargo make check_member ${member}
-exec --fail-on-error cargo make strict_clippy_member ${member}
-echo Strict validation complete for ${member}!
+targets = get_env TARGETS
+target_list = split ${targets} " "
+echo "Configured targets:"
+for target in ${target_list}
+    target = trim ${target}
+    if not is_empty ${target}
+        echo "  - ${target}"
+    end
+end
 '''
-]
