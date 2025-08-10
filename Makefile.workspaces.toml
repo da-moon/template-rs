@@ -373,17 +373,21 @@ for member in ${member_list}
                     t = trim ${line}
                     if starts_with ${t} "[[bin]]"
                         in_bin = "1"
-                        continue
-                    end
-                    if not is_empty ${in_bin}
-                        if starts_with ${t} "name"
+                    elif starts_with ${t} "[["
+                        # Reset in_bin when encountering any other section
+                        in_bin = ""
+                    elif starts_with ${t} "["
+                        # Reset in_bin when encountering any section
+                        in_bin = ""
+                    elif not is_empty ${in_bin}
+                        # Check for exact "name = " pattern to avoid matching namespace, etc.
+                        if starts_with ${t} "name = "
                             parts = split ${t} "\""
                             if greater_than ${parts.length} 1
                                 bn = array_get ${parts} 1
                                 if not is_empty ${bn}
                                     binary_names_str = concat ${binary_names_str} " " ${bn}
                                 end
-                                in_bin = ""
                             end
                         end
                     end
@@ -411,37 +415,36 @@ for member in ${member_list}
                             
                             for binary_name in ${bin_list}
                                 binary_name = trim ${binary_name}
-                                if is_empty ${binary_name}
-                                    continue
-                                end
-                                # Source binary path
-                                src_binary = concat ${target_dir} "/" ${binary_name}
-                                
-                                # Handle Windows suffix
-                                if contains ${target} "windows"
-                                    if not ends_with ${src_binary} ".exe"
-                                        src_binary = concat ${src_binary} ".exe"
-                                    end
-                                end
-                                
-                                # Check if binary exists
-                                if is_path_exists ${src_binary}
-                                    # Create distribution directory
-                                    dist_target_dir = concat ${dist_dir} "/" ${target}
-                                    mkdir ${dist_target_dir}
+                                if not is_empty ${binary_name}
+                                    # Source binary path
+                                    src_binary = concat ${target_dir} "/" ${binary_name}
                                     
-                                    # Destination filename includes binary name
-                                    dest_name = concat ${binary_name} "-" ${crate_version} "-" ${target}
+                                    # Handle Windows suffix
                                     if contains ${target} "windows"
-                                        dest_name = concat ${dest_name} ".exe"
+                                        if not ends_with ${src_binary} ".exe"
+                                            src_binary = concat ${src_binary} ".exe"
+                                        end
                                     end
                                     
-                                    dest_path = concat ${dist_target_dir} "/" ${dest_name}
-                                    
-                                    echo "Copying ${src_binary} -> ${dest_path}"
-                                    cp ${src_binary} ${dest_path}
-                                else
-                                    echo "Warning: Binary not found at ${src_binary}"
+                                    # Check if binary exists
+                                    if is_path_exists ${src_binary}
+                                        # Create distribution directory
+                                        dist_target_dir = concat ${dist_dir} "/" ${target}
+                                        mkdir ${dist_target_dir}
+                                        
+                                        # Destination filename includes binary name
+                                        dest_name = concat ${binary_name} "-" ${crate_version} "-" ${target}
+                                        if contains ${target} "windows"
+                                            dest_name = concat ${dest_name} ".exe"
+                                        end
+                                        
+                                        dest_path = concat ${dist_target_dir} "/" ${dest_name}
+                                        
+                                        echo "Copying ${src_binary} -> ${dest_path}"
+                                        cp ${src_binary} ${dest_path}
+                                    else
+                                        echo "Warning: Binary not found at ${src_binary}"
+                                    end
                                 end
                             end
                         end
