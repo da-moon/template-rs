@@ -350,18 +350,54 @@ for member in ${member_list}
                 crate_name = ""
                 crate_version = ""
                 
-                # Basic TOML parsing for name and version
+                # Basic TOML parsing for name and version (only from [package] section)
                 lines = split ${cargo_content} \n
+                in_package_section = ""
                 for line in ${lines}
-                    if starts_with ${line} "name = "
-                        parts = split ${line} "\""
-                        if greater_than ${parts.length} 1
-                            crate_name = array_get ${parts} 1
+                    trimmed_line = trim ${line}
+                    
+                    # Check if we're entering/leaving a section
+                    if starts_with ${trimmed_line} "["
+                        if equals ${trimmed_line} "[package]"
+                            in_package_section = "true"
+                        else
+                            in_package_section = ""
                         end
-                    elif starts_with ${line} "version = "
-                        parts = split ${line} "\""
-                        if greater_than ${parts.length} 1
-                            crate_version = array_get ${parts} 1
+                    elif not is_empty ${in_package_section}
+                        # Only parse name and version within [package] section
+                        # Remove all whitespace around = for consistent parsing
+                        normalized_line = replace ${trimmed_line} " " ""
+                        
+                        if starts_with ${normalized_line} "name="
+                            # Handle both quoted and unquoted values
+                            parts = split ${trimmed_line} "\""
+                            if greater_than ${parts.length} 1
+                                crate_name = array_get ${parts} 1
+                            else
+                                # Try splitting by = for unquoted values
+                                parts = split ${trimmed_line} "="
+                                if greater_than ${parts.length} 1
+                                    value = array_get ${parts} 1
+                                    # Trim whitespace and quotes
+                                    crate_name = trim ${value}
+                                    crate_name = replace ${crate_name} "\"" ""
+                                end
+                            end
+                        elif starts_with ${normalized_line} "version="
+                            # Handle both quoted and unquoted values
+                            parts = split ${trimmed_line} "\""
+                            if greater_than ${parts.length} 1
+                                crate_version = array_get ${parts} 1
+                            else
+                                # Try splitting by = for unquoted values
+                                parts = split ${trimmed_line} "="
+                                if greater_than ${parts.length} 1
+                                    value = array_get ${parts} 1
+                                    # Trim whitespace and quotes
+                                    crate_version = trim ${value}
+                                    crate_version = replace ${crate_version} "\"" ""
+                                end
+                            end
                         end
                     end
                 end

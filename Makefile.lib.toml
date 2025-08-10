@@ -81,15 +81,42 @@ if is_path_exists "Cargo.toml"
         # Use empty string as false, non-empty as true to avoid truthy string bug
         in_example = ""
         for line in ${lines}
-            if equals ${line} "[[example]]"
+            trimmed_line = trim ${line}
+            if equals ${trimmed_line} "[[example]]"
                 in_example = "true"
             elif not is_empty ${in_example}
-                if starts_with ${line} "name = "
-                    parts = split ${line} "\""
-                    if greater_than ${parts.length} 1
-                        example_name = array_get ${parts} 1
-                        echo "  - ${example_name}"
+                # Check for sections to reset in_example
+                if starts_with ${trimmed_line} "[["
+                    # If we hit another section and haven't found name yet, reset
+                    if not equals ${trimmed_line} "[[example]]"
                         in_example = ""
+                    end
+                elif starts_with ${trimmed_line} "["
+                    # Reset on any single bracket section
+                    in_example = ""
+                else
+                    # Remove all whitespace around = for consistent parsing
+                    normalized_line = replace ${trimmed_line} " " ""
+                    
+                    if starts_with ${normalized_line} "name="
+                        # Handle both quoted and unquoted values
+                        parts = split ${trimmed_line} "\""
+                        if greater_than ${parts.length} 1
+                            example_name = array_get ${parts} 1
+                            echo "  - ${example_name}"
+                            in_example = ""
+                        else
+                            # Try splitting by = for unquoted values
+                            parts = split ${trimmed_line} "="
+                            if greater_than ${parts.length} 1
+                                value = array_get ${parts} 1
+                                # Trim whitespace and quotes
+                                example_name = trim ${value}
+                                example_name = replace ${example_name} "\"" ""
+                                echo "  - ${example_name}"
+                                in_example = ""
+                            end
+                        end
                     end
                 end
             end
