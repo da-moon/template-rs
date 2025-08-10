@@ -33,14 +33,14 @@ DIST_DIR = { value = "dist", condition = { env_not_set = ["DIST_DIR"] } }
 #  ╰──────────────────────────────────────────────────────────╯
 
 [tasks.init]
-extend = "../Makefile.toml"
+extend = "Makefile.toml"
 
 #  ╭──────────────────────────────────────────────────────────╮
 #  │                  Target Preparation                      │
 #  ╰──────────────────────────────────────────────────────────╯
 
 [tasks.prepare_targets]
-extend = "../Makefile.toml"
+extend = "Makefile.toml"
 
 #  ╭──────────────────────────────────────────────────────────╮
 #  │                 Workspace-Wide Tasks                     │
