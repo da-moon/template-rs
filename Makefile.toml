@@ -90,4 +90,69 @@ dependencies = ["build", "test", "format","fix" , "check", "clippy"]
 description = "Run full validation sequence with strict clippy"
 dependencies = ["build", "test", "format","fix", "check", "strict-clippy"]
 
+[tasks.package_targets]
+description = "Package built binary targets into dist/ with correct crate name and version"
+script = [
+'''
+#!@duckscript
+
+# Ensure jq is available
+jq_exists = exec_output bash -c "command -v jq >/dev/null 2>&1; echo $?"
+assert_eq ${jq_exists.stdout} "0" "jq is required but not found. Please install jq."
+
+# Determine root Cargo.toml path
+locate = exec_output cargo locate-project --message-format plain
+assert ${locate.exit_code} "Failed to locate Cargo.toml"
+root_manifest = trim ${locate.stdout}
+
+# Fetch cargo metadata for the current project
+meta = exec_output cargo metadata --format-version 1 --no-deps --manifest-path ${root_manifest}
+assert ${meta.exit_code} "Failed to retrieve cargo metadata"
+meta_json = set ${meta.stdout}
+
+# Write metadata to a temporary file for jq processing
+tmpfile = tempfile
+writefile ${tmpfile} ${meta_json}
+
+# Extract crate name and version for the current manifest path
+name_out = exec_output bash -c "jq -r --arg mp '${root_manifest}' '.packages[] | select(.manifest_path == $mp) | .name' ${tmpfile}"
+assert ${name_out.exit_code} "Failed to parse crate name from cargo metadata"
+crate_name = trim ${name_out.stdout}
+
+ver_out = exec_output bash -c "jq -r --arg mp '${root_manifest}' '.packages[] | select(.manifest_path == $mp) | .version' ${tmpfile}"
+assert ${ver_out.exit_code} "Failed to parse crate version from cargo metadata"
+crate_version = trim ${ver_out.stdout}
+
+# Get list of binary targets for the current crate
+bins_out = exec_output bash -c "jq -r --arg mp '${root_manifest}' '.packages[] | select(.manifest_path == $mp) | .targets[] | select(.kind[] == \"bin\") | .name' ${tmpfile}"
+assert ${bins_out.exit_code} "Failed to parse binary targets from cargo metadata"
+
+# Prepare dist directory
+dist_dir = set dist
+mkdir ${dist_dir}
+
+# Package each binary target from target/release
+bins = split ${bins_out.stdout} "\n"
+for bin_name in ${bins}
+    skip = is_empty ${bin_name}
+    if not ${skip}
+        src_path = set target/release/${bin_name}
+        exists = is_file ${src_path}
+        if ${exists}
+            # If multiple binaries, include bin name in artifact; if single, still include for consistency
+            artifact = set ${dist_dir}/${crate_name}-v${crate_version}-${bin_name}
+            cp ${src_path} ${artifact}
+            chmod +x ${artifact}
+            echo Packaged ${artifact}
+        else
+            echo Warning: built binary not found at ${src_path}. Did you run a release build?
+        end
+    end
+end
+
+# Clean up
+rm ${tmpfile}
+'''
+]
+
 
