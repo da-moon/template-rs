@@ -369,26 +369,44 @@ end
 echo "Packaging ${crate_name} v${crate_version}"
 
 # Get binary name from Cargo.toml if different
-binary_name = ${crate_name}
+binary_names_str = ""
 cargo_content = readfile Cargo.toml
 if contains ${cargo_content} "[[bin]]"
-    # Extract binary name if specified
+    # Extract all binary names from [[bin]] sections
     lines = split ${cargo_content} \n
-    in_bin = set false
+    # Use empty string as false, non-empty as true to avoid truthy string bug
+    in_bin = ""
     for line in ${lines}
-        if equals ${line} "[[bin]]"
-            in_bin = set true
-        elif ${in_bin}
-            if starts_with ${line} "name = "
-                parts = split ${line} "\""
+        t = trim ${line}
+        if starts_with ${t} "[[bin]]"
+            in_bin = "1"
+            continue
+        end
+
+        if not is_empty ${in_bin}
+            if starts_with ${t} "name"
+                parts = split ${t} "\""
                 if greater_than ${parts.length} 1
-                    binary_name = array_get ${parts} 1
-                    in_bin = set false
+                    bin_name = array_get ${parts} 1
+                    if not is_empty ${bin_name}
+                        binary_names_str = concat ${binary_names_str} " " ${bin_name}
+                    end
+                    # close current [[bin]] section
+                    in_bin = ""
                 end
             end
         end
     end
 end
+
+# Default to crate name if no [[bin]] names found
+if is_empty ${binary_names_str}
+    binary_names_str = ${crate_name}
+end
+
+# Prepare list of binaries to package
+binary_names_str = trim ${binary_names_str}
+bin_list = split ${binary_names_str} " "
 
 for target in ${target_list}
     target = trim ${target}
@@ -402,34 +420,42 @@ for target in ${target_list}
             target_dir = concat ${target_dir} "/debug"
         end
         
-        # Source binary path
-        src_binary = concat ${target_dir} "/" ${binary_name}
-        
-        # Handle Windows suffix
-        if contains ${target} "windows"
-            if not ends_with ${src_binary} ".exe"
-                src_binary = concat ${src_binary} ".exe"
+        # Package each binary
+        for binary_name in ${bin_list}
+            binary_name = trim ${binary_name}
+            if is_empty ${binary_name}
+                continue
             end
-        end
-        
-        # Check if binary exists
-        if is_path_exists ${src_binary}
-            # Create distribution directory
-            dist_target_dir = concat ${dist_dir} "/" ${target}
-            mkdir ${dist_target_dir}
             
-            # Destination filename
-            dest_name = concat ${crate_name} "-" ${crate_version} "-" ${target}
+            # Source binary path
+            src_binary = concat ${target_dir} "/" ${binary_name}
+            
+            # Handle Windows suffix
             if contains ${target} "windows"
-                dest_name = concat ${dest_name} ".exe"
+                if not ends_with ${src_binary} ".exe"
+                    src_binary = concat ${src_binary} ".exe"
+                end
             end
             
-            dest_path = concat ${dist_target_dir} "/" ${dest_name}
-            
-            echo "Copying ${src_binary} -> ${dest_path}"
-            cp ${src_binary} ${dest_path}
-        else
-            echo "Warning: Binary not found at ${src_binary}"
+            # Check if binary exists
+            if is_path_exists ${src_binary}
+                # Create distribution directory
+                dist_target_dir = concat ${dist_dir} "/" ${target}
+                mkdir ${dist_target_dir}
+                
+                # Destination filename includes binary name to avoid collisions
+                dest_name = concat ${binary_name} "-" ${crate_version} "-" ${target}
+                if contains ${target} "windows"
+                    dest_name = concat ${dest_name} ".exe"
+                end
+                
+                dest_path = concat ${dist_target_dir} "/" ${dest_name}
+                
+                echo "Copying ${src_binary} -> ${dest_path}"
+                cp ${src_binary} ${dest_path}
+            else
+                echo "Warning: Binary not found at ${src_binary}"
+            end
         end
     end
 end
