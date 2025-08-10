@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -efuo pipefail
+
+# TODO: Use this to get OS and run apt commands only on DEBIAN based distros ; otherwise skip apt commands
 cat /etc/os-release
 
 # Install system packages first
+# FIXME: check for sudo availably ; check to see if user is root ; there are edge-cases that needs to be handled
 apt-get update -qq
 apt-get install -yq pipx curl gcc libc6-dev make musl-tools musl-dev pkg-config jq \
   || {
@@ -26,6 +29,7 @@ fi
 # Install Rust if not present
 if ! command -v rustc &>/dev/null; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+  # FIXME: this file may not exist or RUSTHOME might be different
   source ~/.cargo/env
 fi
 
@@ -38,12 +42,13 @@ rustup default "${TOOLCHAIN}"
 ! ( rustup component list --toolchain "${TOOLCHAIN}" --installed | grep -q "rustfmt" ) && rustup component add "rustfmt" --toolchain "${TOOLCHAIN}"
 ! ( rustup component list --toolchain "${TOOLCHAIN}" --installed | grep -q "clippy" ) && rustup component add "clippy" --toolchain "${TOOLCHAIN}"
 if ! command -v cargo-binstall &>/dev/null; then
+  # FIXME: check for sudo availably ; check to see if user is root ; there are edge-cases that needs to be handled
   curl -sL "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/latest" \
     | jq -r ".assets[] | select(.name | contains(\"$(uname -m)\") and contains(\"linux-musl\") and endswith(\".tgz\") and (contains(\".sig\") | not) and (contains(\".full\") | not)) | .browser_download_url" \
     | xargs curl -sL \
       | tar -xzOf - cargo-binstall \
-      | tee /usr/local/bin/cargo-binstall >/dev/null \
-    && chmod +x /usr/local/bin/cargo-binstall \
+      | sudo tee /usr/local/bin/cargo-binstall >/dev/null \
+    && sudo chmod +x /usr/local/bin/cargo-binstall \
     && cargo binstall --help \
     || {
       echo "Failed to download cargo-binstall"
@@ -70,8 +75,3 @@ else
 fi
 
 echo "✓ musl-gcc is available for cross-compilation to musl targets"
-
-if [[ -n "${DEEPSOURCE_TOKEN:-}" ]]; then
-  curl https://deepsource.io/cli | env BINDIR=/usr/local/bin sh
-  deepsource auth login --with-token "${DEEPSOURCE_TOKEN}"
-fi
