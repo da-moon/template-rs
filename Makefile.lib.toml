@@ -78,17 +78,18 @@ if is_path_exists "Cargo.toml"
         echo "Additional examples defined in Cargo.toml:"
         
         lines = split ${cargo_content} \n
-        in_example = set false
+        # Use empty string as false, non-empty as true to avoid truthy string bug
+        in_example = ""
         for line in ${lines}
             if equals ${line} "[[example]]"
-                in_example = set true
-            elif ${in_example}
+                in_example = "true"
+            elif not is_empty ${in_example}
                 if starts_with ${line} "name = "
                     parts = split ${line} "\""
                     if greater_than ${parts.length} 1
                         example_name = array_get ${parts} 1
                         echo "  - ${example_name}"
-                        in_example = set false
+                        in_example = ""
                     end
                 end
             end
