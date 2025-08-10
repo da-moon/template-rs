@@ -1,6 +1,14 @@
 # Template Rust Project
 
-A Rust template project configured for static linking with musl.
+A Rust template project configured for static linking with musl and featuring OS-agnostic, multi-architecture Cargo Make workflows.
+
+## Features
+
+- **Dynamic Workspace Discovery**: Automatically detects workspace members without manual configuration
+- **Multi-Target Support**: Build, test, and package for multiple architectures/OS combinations
+- **OS-Agnostic**: Pure Duckscript implementation works on Linux, macOS, and Windows
+- **Library Support**: Dedicated tasks for managing and testing library examples
+- **Agent-Friendly**: Clear, consistent interface for both human developers and AI agents
 
 ## Quick Start Guide
 
@@ -140,6 +148,98 @@ cargo build --target armv7-unknown-linux-musleabihf --release
 The resulting binaries will be statically linked and can run on any compatible
 Linux system without external dependencies.
 
+## Cargo Make Usage
+
+This template includes comprehensive Cargo Make workflows for building, testing, and packaging across multiple targets.
+
+### Basic Commands
+
+```bash
+# Install cargo-make (if not already installed)
+cargo install cargo-make
+
+# Single-crate tasks (host target)
+cargo make build              # Build for host
+cargo make test               # Run tests
+cargo make check              # Run cargo check
+cargo make clippy             # Run clippy
+cargo make validate           # Run full validation (format, build, test, clippy)
+
+# Multi-target tasks
+TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu" cargo make build_targets
+TARGETS="x86_64-unknown-linux-musl x86_64-pc-windows-gnu" cargo make test_targets
+cargo make package_targets    # Package binaries to dist/<triple>/
+
+# Environment variables
+RELEASE=1 cargo make build    # Build in release mode
+STRICT=1 cargo make clippy    # Use strict clippy settings
+FEATURES="feature1,feature2" cargo make build
+ALL_FEATURES=1 cargo make test
+```
+
+### Workspace Commands
+
+For multi-crate workspaces:
+
+```bash
+# Build all workspace members
+cargo make build_all
+
+# Target matrix builds (all members × all targets)
+TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu" cargo make build_all_members_targets
+
+# Per-member operations
+MEMBER=my-crate cargo make build_member
+MEMBER=my-crate cargo make test_member
+
+# List workspace members
+cargo make list_members
+```
+
+### Library Example Commands
+
+For library crates with examples:
+
+```bash
+# List available examples
+cargo make list_examples
+
+# Run a specific example
+EXAMPLE=my_example cargo make run_example
+
+# Build/test all examples
+cargo make build_examples
+cargo make test_examples
+
+# Multi-target example builds
+TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu" cargo make build_examples_targets
+```
+
+### Cross-Compilation Notes
+
+- Tests automatically skip for cross-compilation targets unless a runner is configured
+- Set runners via environment variables: `CARGO_TARGET_<TRIPLE>_RUNNER`
+- Example: `CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER=qemu-aarch64`
+
+### Agent Usage
+
+For AI agents and automation:
+
+```bash
+# Prepare environment and build for multiple targets
+export TARGETS="x86_64-unknown-linux-musl aarch64-unknown-linux-musl"
+cargo make prepare_targets    # Installs missing targets
+cargo make build_targets      # Builds for all targets
+cargo make package_targets    # Creates dist/<triple>/ artifacts
+
+# Full validation across targets
+cargo make validate_targets
+
+# Library development
+cargo make list_examples
+EXAMPLE=demo cargo make run_example
+```
+
 ## Project Structure
 
 ```
@@ -154,7 +254,9 @@ Linux system without external dependencies.
 ├── build.rs                           # Build script for static linking
 ├── Cargo.toml                         # Project configuration
 ├── Cargo.lock                         # Dependency lock file
-├── Makefile.toml                      # Cargo-make configuration
+├── Makefile.toml                      # Main cargo-make configuration
+├── Makefile.workspaces.toml           # Workspace-specific tasks
+├── Makefile.lib.toml                  # Library example tasks
 ├── rust-toolchain.toml               # Rust toolchain specification
 └── README.md                          # This file
 ```
